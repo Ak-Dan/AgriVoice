@@ -1,0 +1,34 @@
+{
+  "name": "cropguard-ai",
+  "version": "1.0.0",
+  "private": "true",
+  "description": "A mobile web app that lets farmers photograph a diseased crop leaf and receive an instant AI diagnosis with treatment advice, in English or Swahili.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": "npm run start -w backend",
+    "start:frontend": "npm run start -w frontend"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/waynemwashuma/cropguard-ai.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/waynemwashuma/cropguard-ai/issues"
+  },
+  "homepage": "https://github.com/waynemwashuma/cropguard-ai#readme",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

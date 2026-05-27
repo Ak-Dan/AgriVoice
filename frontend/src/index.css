@@ -1,0 +1,44 @@
+* { box-sizing: border-box; }
+body { margin: 0; }
+
+/* Subtle Animated Crop-Themed Mesh Background */
+.bg-mesh {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  width: 100vw;
+  height: 100vh;
+  background: 
+    radial-gradient(ellipse 77% 67% at 60% 22%, #dcfce7b7 0%, transparent 78%),
+    radial-gradient(ellipse 70% 75% at 20% 87%, #bbf7d0aa 0%, transparent 72%),
+    radial-gradient(ellipse 58% 38% at 15% 12%, #fef9c3b0 0%, transparent 68%),        /* maize yellow */
+    radial-gradient(ellipse 38% 38% at 87% 80%, #fde68aac 0%, transparent 70%),        /* bright maize edge */
+    radial-gradient(ellipse 75% 38% at 52% 88%, #f8fafce3 0%, transparent 83%),        /* sky/soft white */
+    radial-gradient(ellipse 50% 35% at 84% 16%, #a3a38085 0%, transparent 77%),        /* earth */
+    radial-gradient(ellipse 42% 21% at 71% 69%, #5eead4a0 0%, transparent 80%);        /* teal/leaf highlight */
+  animation: meshCropPulse 28s cubic-bezier(.7,.2,.3,1) infinite alternate;
+}
+
+@keyframes meshCropPulse {
+  0% {
+    background:
+      radial-gradient(ellipse 77% 67% at 60% 22%, #dcfce7b7 0%, transparent 78%),
+      radial-gradient(ellipse 70% 75% at 20% 87%, #bbf7d0aa 0%, transparent 72%),
+      radial-gradient(ellipse 58% 38% at 15% 12%, #fef9c3b0 0%, transparent 68%), /* maize yellow */
+      radial-gradient(ellipse 38% 38% at 87% 80%, #fde68aac 0%, transparent 70%),
+      radial-gradient(ellipse 75% 38% at 52% 88%, #f8fafce3 0%, transparent 83%),
+      radial-gradient(ellipse 50% 35% at 84% 16%, #a3a38085 0%, transparent 77%),
+      radial-gradient(ellipse 42% 21% at 71% 69%, #5eead4a0 0%, transparent 80%);
+  }
+  100% {
+    background:
+      radial-gradient(ellipse 77% 67% at 65% 28%, #bbf7d0c7 0%, transparent 77%),
+      radial-gradient(ellipse 73% 73% at 16% 93%, #dcfce7cf 0%, transparent 72%),
+      radial-gradient(ellipse 64% 37% at 17% 15%, #fef9c3b0 0%, transparent 65%),
+      radial-gradient(ellipse 43% 44% at 93% 75%, #fef08a99 0%, transparent 69%),
+      radial-gradient(ellipse 73% 38% at 48% 92%, #e0f2fecc 0%, transparent 79%),
+      radial-gradient(ellipse 45% 38% at 80% 16%, #a3a38099 0%, transparent 79%),
+      radial-gradient(ellipse 42% 21% at 69% 73%, #99f6e4af 0%, transparent 80%);
+  }
+}
