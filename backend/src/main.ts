@@ -3,9 +3,14 @@ import multer from "multer";
 import { InferenceSession, Tensor } from "onnxruntime-node";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
-import { readFileSync } from "fs";
 import sharp from "sharp";
-import type { Inference, Severity } from "../../common/index.ts";
+import type { Inference } from "../../common/index.ts";
+import {
+  NORMALIZATION_MEAN,
+  NORMALIZATION_STD,
+  decodePrediction,
+  loadClassLabels,
+} from "./inference.ts";
 
 const app = express();
 const upload = multer();
@@ -21,59 +26,9 @@ const LABELS_PATH = resolve(__dirname, "../../model/labels.json");
 // Load the 38 class names in the EXACT order the model was trained on.
 // labels.json is written by convert_to_onnx.py from the checkpoint's class list,
 // so this stays in sync with the model automatically.
-const CLASS_DISEASES: string[] = JSON.parse(
-  readFileSync(LABELS_PATH, "utf-8")
-) as string[];
-
-// ImageNet normalization stats — these MUST match what training used.
-const NORMALIZATION_MEAN = [0.485, 0.456, 0.406] as const;
-const NORMALIZATION_STD = [0.229, 0.224, 0.225] as const;
+const CLASS_DISEASES = loadClassLabels(LABELS_PATH);
 
 let session: InferenceSession | null = null;
-
-function softmax(scores: number[]) {
-  const maxScore = Math.max(...scores);
-  const exps = scores.map((score) => Math.exp(score - maxScore));
-  const sum = exps.reduce((total, value) => total + value, 0);
-  return exps.map((value) => value / sum);
-}
-
-function getSeverity(disease: string, confidence: number): Severity {
-  // Any label ending in "healthy" is a low-severity (non-disease) result.
-  if (disease.toLowerCase().endsWith("healthy")) {
-    return "low";
-  }
-
-  if (confidence >= 0.9) {
-    return "high";
-  }
-
-  if (confidence >= 0.75) {
-    return "medium";
-  }
-
-  return "low";
-}
-
-function decodePrediction(output: ArrayLike<number>) {
-  const scores = Array.from(output, Number);
-  const probabilities = softmax(scores);
-
-  let topIndex = 0;
-  for (let index = 1; index < probabilities.length; index += 1) {
-    if (probabilities[index] > probabilities[topIndex]) {
-      topIndex = index;
-    }
-  }
-
-  const disease = CLASS_DISEASES[topIndex] ?? "unknown";
-
-  return {
-    disease,
-    confidence: probabilities[topIndex] ?? 0,
-    severity: getSeverity(disease, probabilities[topIndex] ?? 0),
-  };
-}
 
 async function loadModel() {
   const model = await InferenceSession.create(MODEL_PATH);
@@ -144,7 +99,7 @@ async function handleInference(req: express.Request, res: express.Response) {
       throw new Error(`Missing output tensor: ${outputName}`);
     }
 
-    const prediction = decodePrediction(output as ArrayLike<number>);
+    const prediction = decodePrediction(output as ArrayLike<number>, CLASS_DISEASES);
     const response: Inference = {
       output: prediction.disease,
       confidence: Number(prediction.confidence.toFixed(4)),
@@ -160,7 +115,7 @@ async function handleInference(req: express.Request, res: express.Response) {
 
 app.post("/infer", upload.single("image"), handleInference);
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT ?? 3000);
 
 loadModel().then(() => {
   app.listen(PORT, () => {
