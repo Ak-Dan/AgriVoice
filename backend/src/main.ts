@@ -3,6 +3,7 @@ import multer from "multer";
 import { InferenceSession, Tensor } from "onnxruntime-node";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
+import { readFileSync } from "fs";
 import sharp from "sharp";
 import type { Inference, Severity } from "../../common/index.ts";
 
@@ -11,23 +12,22 @@ const upload = multer();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Use the newly exported 38-class model. The float model.onnx (~8.7 MB) is the
+// safest choice for onnxruntime-node; there is no size pressure server-side.
 const MODEL_PATH = resolve(__dirname, "../../model/model.onnx");
-const CLASS_DISEASES = [
-  "rust",
-  "greyLeaf",
-  "healthy",
-  "blight",
-] as const;
-const NORMALIZATION_MEAN = [
-  0.43762004375457764,
-  0.4983558654785156,
-  0.787480592727661,
-] as const;
-const NORMALIZATION_STD = [
-  0.43693873286247253,
-  0.49755582213401794,
-  0.37814345955848694,
-] as const;
+const LABELS_PATH = resolve(__dirname, "../../model/labels.json");
+
+// Load the 38 class names in the EXACT order the model was trained on.
+// labels.json is written by convert_to_onnx.py from the checkpoint's class list,
+// so this stays in sync with the model automatically.
+const CLASS_DISEASES: string[] = JSON.parse(
+  readFileSync(LABELS_PATH, "utf-8")
+) as string[];
+
+// ImageNet normalization stats — these MUST match what training used.
+const NORMALIZATION_MEAN = [0.485, 0.456, 0.406] as const;
+const NORMALIZATION_STD = [0.229, 0.224, 0.225] as const;
 
 let session: InferenceSession | null = null;
 
@@ -38,8 +38,9 @@ function softmax(scores: number[]) {
   return exps.map((value) => value / sum);
 }
 
-function getSeverity(disease: Inference["output"], confidence: number): Severity {
-  if (disease === "healthy") {
+function getSeverity(disease: string, confidence: number): Severity {
+  // Any label ending in "healthy" is a low-severity (non-disease) result.
+  if (disease.toLowerCase().endsWith("healthy")) {
     return "low";
   }
 
@@ -64,8 +65,8 @@ function decodePrediction(output: ArrayLike<number>) {
       topIndex = index;
     }
   }
-  
-  const disease = CLASS_DISEASES[topIndex] ?? "healthy";
+
+  const disease = CLASS_DISEASES[topIndex] ?? "unknown";
 
   return {
     disease,
@@ -78,6 +79,7 @@ async function loadModel() {
   const model = await InferenceSession.create(MODEL_PATH);
   session = model;
   console.log("Model loaded from", MODEL_PATH);
+  console.log("Loaded", CLASS_DISEASES.length, "class labels");
   console.log("Inputs:", model.inputNames);
   console.log("Outputs:", model.outputNames);
   return model;
