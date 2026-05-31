@@ -212,6 +212,11 @@ node_modules
 #custom
 **/dist
 **/Maize
+# Model artifacts — large binaries, kept in Drive not git
+*.pt
+*.onnx
+*.zip
+PlantVillage-Dataset/
 
 # Tell OneDrive to never sync node_modules
 attrib +P node_modules /S /D

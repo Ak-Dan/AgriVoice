@@ -22,3 +22,19 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Model artifacts (large binaries — keep in Drive / LFS, not git)
+*.pt
+*.onnx
+*.zip
+
+# Datasets
+Maize/
+PlantVillage-Dataset/
+
+# Environment / secrets
+.env
+.env.*
+
+# Map data is large-ish; keep if small, ignore if you prefer
+# frontend/public/geo/*.json
