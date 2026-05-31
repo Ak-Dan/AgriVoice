@@ -1,17 +1,77 @@
-<<<<<<< HEAD
-#Agrivoice
+# AgriVoice
 
-A mobile web app that lets farmers photograph a diseased crop leaf and receive an instant AI diagnosis with treatment advice, in English or Swahili.
+**An open-source, multimodal AI agronomist for smallholder farmers in Africa.**
 
-## Run Locally
+AgriVoice brings instant crop disease diagnosis and expert agricultural advice to rural farmers in Nigeria, Kenya, and Ethiopia. By operating entirely over channels farmers already use daily - WhatsApp and USSD - we eliminate the need for new app downloads, smartphone literacy, or high-speed internet.
 
-From the repository root, install dependencies for the workspace:
+## The Problem It Solves
+
+Smallholder farmers (managing 0.5 to 5 hectares) are the backbone of African food production, yet they remain severely underserved.
+
+- **Crop Disease Uncertainty:** Farmers often cannot identify a disease until significant damage is done.
+- **Lack of Expert Access:** Reaching an agronomist can take 2-4 days and costs money. The crops can't wait.
+- **Language Barriers:** Most existing ag-tech tools are in English.
+- **Silent Outbreaks:** Diseases spread unnoticed because there's no system to aggregate farmer reports at the village or regional level.
+
+## How It Works
+
+AgriVoice turns a simple WhatsApp number or USSD code into a direct line to an expert.
+
+1. **Farmer Input:** A farmer sends a photo of a sick leaf and a voice message via WhatsApp, or navigates a zero-data USSD menu (`*123#`).
+2. **AI Diagnosis:** The multimodal router processes the input. Whisper transcribes the voice note, while an EfficientNet-B0 model diagnoses 38 diseases across 12 crops.
+3. **RAG Agronomist:** A LangChain + ChromaDB pipeline pulls specific treatment plans from trusted crop guides, agricultural manuals, bulletins, and market data.
+4. **Native Language Reply:** Translation and text-to-speech services return voice and text guidance in local languages such as Hausa, Swahili, and Amharic.
+5. **Early Warning:** Every query can be geo-tagged and fed into a disease heatmap, alerting human extension workers to potential outbreaks before they spread.
+
+## Architecture & Tech Stack
+
+This project is built to run on a **$0 infrastructure cost** using free tiers and open-source tooling.
+
+### 1. Farmer Layer
+
+- WhatsApp (Twilio API)
+- USSD (Africa's Talking API)
+
+### 2. Routing & AI Core
+
+- Express/Node diagnosis API for the current Week 2 build
+- Future FastAPI multimodal input router
+- Whisper STT for voice transcription
+- EfficientNet-B0 / ONNX computer vision
+- Translation and TTS services for native-language replies
+- LangChain + ChromaDB for retrieval-augmented agronomy guidance
+
+### 3. Data Layer
+
+- Supabase PostgreSQL + PostGIS for geo-tagging and query logs
+- ChromaDB local vector store for agricultural documents
+- GitHub Actions for CI
+
+### 4. Admin / Agronomist Dashboard
+
+- React + Leaflet-style dashboard for heatmaps and escalation queues
+- Supabase Auth planned for protected admin access
+
+## Week 2 Public Demo
+
+The current public web surface is a temporary demo console for judges and teammates. It is not the final farmer-facing product. The production AgriVoice direction remains WhatsApp, USSD, voice, and local-language support.
+
+For this week's submission, the demo proves:
+
+- The frontend is reachable on the public internet.
+- A user can upload a crop image.
+- The backend runs model-backed ONNX inference.
+- GitHub Actions runs tests on pull requests.
+
+## Setup & Installation
+
+Install dependencies from the repository root:
 
 ```bash
 npm install
 ```
 
-Start both the frontend and backend together:
+Start frontend and backend together:
 
 ```bash
 npm start
@@ -22,72 +82,65 @@ Expected local endpoints:
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:3000`
 
-## Run Individual Workspaces
-
-If you want to start each app separately, use these commands from the repository root:
+Run individual workspaces:
 
 ```bash
 npm run start:frontend
 npm run start:backend
 ```
 
-## Backend Model Requirement
+## Model Requirement
 
-The backend depends on a local ONNX model file at `model/model.onnx`.
-=======
-# AgriVoice
+The backend expects:
 
-**An open-source, multimodal AI agronomist for smallholder farmers in Africa.**
+```text
+model/model.onnx
+model/labels.json
+```
 
-AgriVoice brings instant crop disease diagnosis and expert agricultural advice to rural farmers in Nigeria, Kenya, and Ethiopia. By operating entirely over channels farmers already use daily—WhatsApp and USSD—we eliminate the need for new app downloads, smartphone literacy, or high-speed internet. 
+`model/labels.json` is tracked in Git. Large binary model artifacts such as `.onnx` files are ignored, so deployment must provide `model/model.onnx` before starting the backend.
 
-## The Problem It Solves
+For deployment, upload the ONNX model to a stable file host or model registry and set:
 
-Smallholder farmers (managing 0.5 to 5 hectares) are the backbone of African food production, yet they remain severely underserved.
-* **Crop Disease Uncertainty:** Farmers often cannot identify a disease until significant damage is done.
-* **Lack of Expert Access:** Reaching an agronomist can take 2–4 days and costs money. The crops can't wait.
-* **Language Barriers:** Most existing ag-tech tools are in English. 
-* **Silent Outbreaks:** Diseases spread unnoticed because there's no system to aggregate farmer reports at the village or regional level.
+```text
+MODEL_URL=https://your-model-host/model.onnx
+```
 
-## How It Works
+Then run:
 
-AgriVoice turns a simple WhatsApp number or USSD code into a direct line to an expert. 
+```bash
+npm run setup:model
+```
 
-1. **Farmer Input:** A farmer sends a photo of a sick leaf and a voice message via WhatsApp, or navigates a zero-data USSD menu (*123#).
-2. **AI Diagnosis:** The multimodal router processes the input. Whisper transcribes the voice note, while an EfficientNet-B0 model (trained on 54,000+ images) diagnoses 38 diseases across 12 crops with >90% accuracy.
-3. **RAG Agronomist:** A LangChain + ChromaDB pipeline powered by Claude Haiku pulls specific treatment plans from IITA crop guides, FAO manuals, FMARD bulletins, and AgroMall prices.
-4. **Native Language Reply:** Using Meta's NLLB-200 and Coqui TTS, the system sends back a voice note and text diagnosis in Hausa, Swahili, or Amharic.
-5. **Early Warning:** Every query is geo-tagged and fed into a Leaflet.js disease heatmap, alerting human extension workers to potential outbreaks before they spread. If the AI is <70% confident, the case is automatically escalated to a human agronomist.
+## Deployment Notes
 
-## Architecture & Tech Stack
+Recommended Week 2 deployment:
 
-This project is built to run on a **$0 infrastructure cost** using free tiers and open-source tooling.
+- Backend: Render Web Service from the repository root.
+- Frontend: Vercel project from the `frontend` folder.
 
-**1. Farmer Layer:**
-* WhatsApp (Twilio API)
-* USSD (Africa's Talking API)
+Render backend:
 
-**2. Routing & AI Core (Hosted on Render.com free tier):**
-* FastAPI (Multimodal Input Router)
-* Whisper STT (Hausa, Swahili, Amharic)
-* EfficientNet-B0 (ONNX computer vision)
-* Meta NLLB-200 (Translation)
-* Coqui TTS (Voice generation)
-* LangChain & Claude Haiku (RAG brains)
+```bash
+npm install && npm run setup:model
+npm run start -w backend
+```
 
-**3. Data Layer:**
-* Supabase (PostgreSQL + PostGIS for geo-tagging and query logs)
-* ChromaDB (Local vector store for agricultural documents)
-* GitHub Actions (CI/CD)
+Set `MODEL_URL` in Render so the build step can download `model/model.onnx`.
 
-**4. Admin / Agronomist Dashboard:**
-* React & Leaflet.js (Web/PWA for heatmap and escalation queue)
-* Supabase Auth
+Vercel frontend:
 
-## Setup & Installation
+```bash
+npm install
+npm run build -w frontend
+```
 
+Set this Vercel environment variable to the Render backend URL:
 
+```text
+VITE_API_URL=https://your-render-service.onrender.com
+```
 
 ---
+
 *Built to ensure no farmer loses a harvest to a preventable disease.*
->>>>>>> 6f76192e5a0f16fa84ecf0c8cb9fe41a2fcacac3

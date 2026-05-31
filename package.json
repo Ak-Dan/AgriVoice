@@ -2,7 +2,7 @@
   "name": "cropguard-ai",
   "version": "1.0.0",
   "private": "true",
-  "description": "A mobile web app that lets farmers photograph a diseased crop leaf and receive an instant AI diagnosis with treatment advice, in English or Swahili.",
+  "description": "A WhatsApp/USSD-first crop advisory system with a public Week 2 demo console for model-backed crop diagnosis.",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -10,7 +10,8 @@
   "scripts": {
     "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
     "start:backend": "npm run start -w backend",
-    "start:frontend": "npm run start -w frontend"
+    "start:frontend": "npm run start -w frontend",
+    "setup:model": "node scripts/download-model.mjs"
   },
   "repository": {
     "type": "git",
@@ -30,7 +31,8 @@
   ],
   "devDependencies": {
     "@types/d3": "^7.4.3",
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "vitest": "^4.1.7"
   },
   "dependencies": {
     "d3": "^7.9.0",
