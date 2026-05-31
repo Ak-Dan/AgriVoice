@@ -47,43 +47,45 @@ export default function History({ history, onSelect, onClear }: HistoryProps) {
       </div>
 
       <div className="history-list">
-        {history.map(item => (
-          <button
-            key={item.timestamp}
-            className="history-item"
-            style={{ borderLeftColor: SEV_COLOR[item.severity] ?? '#888' }}
-            onClick={() => onSelect(item)}
-            type="button"
-            aria-label={`${t('prediction')}: ${t(`diseases.${item.disease}`)}`}
-          >
-            {item.previewUrl ? (
-              <img
-                src={item.previewUrl}
-                alt={t(`diseases.${item.disease}`)}
-                className="history-thumb"
-              />
-            ) : (
-              <div className="history-thumb-placeholder" aria-hidden="true">🌿</div>
-            )}
+        {history.map(item => {
+          // item.disease is the i18n key; resolves to maize SW content or English fallback.
+          const name = t(`diseases.${item.disease}`);
+          return (
+            <button
+              key={item.timestamp}
+              className="history-item"
+              style={{ borderLeftColor: SEV_COLOR[item.severity] ?? '#888' }}
+              onClick={() => onSelect(item)}
+              type="button"
+              aria-label={`${t('prediction')}: ${name}`}
+            >
+              {item.previewUrl ? (
+                <img
+                  src={item.previewUrl}
+                  alt={name}
+                  className="history-thumb"
+                />
+              ) : (
+                <div className="history-thumb-placeholder" aria-hidden="true">🌿</div>
+              )}
 
-            <div className="history-info">
-              <span className="history-disease">
-                {t(`diseases.${item.disease}`)}
-              </span>
-              <span className="history-meta">
-                {Math.round((item.confidence ?? 0) * 100)}% · {formatTime(item.timestamp)}
-              </span>
-            </div>
+              <div className="history-info">
+                <span className="history-disease">{name}</span>
+                <span className="history-meta">
+                  {Math.round((item.confidence ?? 0) * 100)}% · {formatTime(item.timestamp)}
+                </span>
+              </div>
 
-            <div className="history-right">
-              <span
-                className="history-sev-dot"
-                style={{ background: SEV_COLOR[item.severity] ?? '#888' }}
-              />
-              <span className="history-arrow" aria-hidden="true">›</span>
-            </div>
-          </button>
-        ))}
+              <div className="history-right">
+                <span
+                  className="history-sev-dot"
+                  style={{ background: SEV_COLOR[item.severity] ?? '#888' }}
+                />
+                <span className="history-arrow" aria-hidden="true">›</span>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </section>
   );

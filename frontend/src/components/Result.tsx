@@ -20,27 +20,25 @@ const SEV_BG: Record<string, string> = {
   high:   '#FEE2E2',
 };
 
-const DISEASE_COLOR: Record<string, string> = {
-  rust:       '#92400E',
-  cercospora: '#374151',
-  blight:     '#9A3412',
-  healthy:    '#14532D',
-};
-
 const Result: React.FC<ResultProps> = ({ result, imageUrl, onBack }) => {
   const { t } = useTranslation();
-  const { disease, confidence, severity } = result;
+  const { disease, confidence, severity, recognized } = result;
   const [barWidth, setBarWidth] = useState(0);
 
-  // Animate confidence bar on mount
   useEffect(() => {
     const timer = setTimeout(() => setBarWidth(confidence * 100), 150);
     return () => clearTimeout(timer);
   }, [confidence]);
 
+  // Colour is driven by severity (works for all 38 classes), not a per-disease map.
   const sevColor = SEV_COLOR[severity] ?? '#6B7280';
   const sevBg    = SEV_BG[severity]    ?? '#F3F4F6';
-  const disColor = DISEASE_COLOR[disease] ?? '#14532D';
+
+  // Resolve display text via i18n. For recognised non-maize labels the key is the
+  // raw label; i18n falls back to English under SW. Unknown -> dedicated key.
+  const nameText        = t(`diseases.${disease}`);
+  const descriptionText = t(`diseaseDescriptions.${disease}`);
+  const treatmentText   = t(`treatments.${disease}`);
 
   const sevLabel = (() => {
     if (severity === 'low')    return t('severityLow');
@@ -50,14 +48,12 @@ const Result: React.FC<ResultProps> = ({ result, imageUrl, onBack }) => {
 
   return (
     <section className="result-card">
-      {/* Back button */}
       <button className="result-back" onClick={onBack}>
         ← {t('tryAnother')}
       </button>
 
       <h2 className="result-section-title">📋 {t('result')}</h2>
 
-      {/* Leaf image — centred with confidence badge */}
       <div className="result-img-wrap">
         {imageUrl ? (
           <img className="result-img" src={imageUrl} alt="Diagnosed leaf" />
@@ -75,17 +71,22 @@ const Result: React.FC<ResultProps> = ({ result, imageUrl, onBack }) => {
         </span>
       </div>
 
-      {/* Disease name — centred */}
-      <h3 className="result-disease-name" style={{ color: disColor }}>
-        {t(`diseases.${disease}`)}
+      {/* Disease name (severity-coloured) */}
+      <h3 className="result-disease-name" style={{ color: sevColor }}>
+        {nameText}
       </h3>
 
-      {/* Severity badge */}
+      {/* Low-confidence hedge — important for a tool people act on */}
+      {recognized && confidence < 0.5 && (
+        <p className="result-lowconf-note" style={{ color: '#B45309', textAlign: 'center', fontSize: '0.9rem', margin: '0 0 8px' }}>
+          ⚠ {t('lowConfidenceNote')}
+        </p>
+      )}
+
       <span className="sev-badge" style={{ background: sevBg, color: sevColor }}>
         ⚠ {t('severity')}: {sevLabel}
       </span>
 
-      {/* Confidence bar */}
       <div className="conf-row">
         <div className="conf-labels">
           <span>{t('confidence')}</span>
@@ -101,24 +102,21 @@ const Result: React.FC<ResultProps> = ({ result, imageUrl, onBack }) => {
         </div>
       </div>
 
-      {/* Description box */}
       <div className="result-description-box">
         <strong>ℹ {t('description')}</strong>
-        {t(`diseaseDescriptions.${disease}`)}
+        {descriptionText}
       </div>
 
-      {/* Treatment card — centred, prominent */}
       <div className="treat-card">
         <div className="treat-title">
           <span className="treat-icon">💊</span>
           {t('treatment')}
         </div>
         <p className="treat-text">
-          {t(`treatments.${disease}`)}
+          {treatmentText}
         </p>
       </div>
 
-      {/* Retry button */}
       <div className="retry-wrap">
         <button className="retry-btn" onClick={onBack}>
           {t('tryAnother')}
