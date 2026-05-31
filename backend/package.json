@@ -17,6 +17,7 @@
   "scripts": {
     "start": "npm run dev",
     "dev": "tsx ./src/main.ts",
+    "test": "vitest run",
     "build": ""
   },
   "dependencies": {

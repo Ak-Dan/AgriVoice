@@ -205,7 +205,7 @@ const resources = {
       footer: {
         aboutTitle:   'About Agrivoice',
         aboutText:
-          'Agrivoice is a full-stack machine learning application that detects crop leaf diseases from smartphone photos in under 3 seconds. Built with React, TypeScript, Express.js, and a quantised MobileNetV2 model exported to ONNX \u2014 deployed end-to-end from training pipeline to mobile-responsive web interface \u2014 empowering smallholder farmers with instant, accurate diagnoses.',
+          'Agrivoice is a WhatsApp/USSD-first AI agronomist for smallholder farmers. This public demo console exposes the crop diagnosis engine for Week 2 validation while the production product continues toward voice, local-language, and no-download farmer channels.',
         contactTitle: 'Contact & Support',
         linksTitle:   'Quick Links',
         tipsTitle:    'Tips for Best Results',
