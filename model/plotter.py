@@ -35,7 +35,7 @@ def plot_history(csv_path):
     ax2.tick_params(axis="y", labelcolor="tab:red")
     ax2.legend(loc="upper right")
 
-    plt.title("Training History: MobileNetV2 on PlantVillage Maize dataset")
+    plt.title("Training History: MobileNetV2 on PlantVillage (38 classes)")
     plt.tight_layout()
     plt.savefig("training_log.png", dpi=150, bbox_inches="tight")
     plt.show()

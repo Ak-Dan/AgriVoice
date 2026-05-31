@@ -3,12 +3,11 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchvision import datasets
 import torchvision
-from torchvision.datasets.sbd import shutil
+from torchvision.models import MobileNet_V2_Weights
 from torchvision.transforms import v2 as transforms
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
-from glob import glob
 import os, csv
 import numpy as np
 
@@ -54,12 +53,12 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed(1337)
 
 
-DATA_DIR = "/kaggle/input/datasets/abdallahalidev/plantvillage-dataset/color"
-IMAGE_SUBSET = "Corn*/*"
-MAIZE_DIR = "Maize"
-CORN_IMAGES = glob(os.path.sep.join([DATA_DIR, IMAGE_SUBSET]))
+# Point straight at the full PlantVillage "color" directory.
+# It already contains one subfolder per class (38 classes), so no subsetting is needed.
+# Adjust this path to match where the dataset is mounted in your environment.
+DATA_DIR = "/content/PlantVillage-Dataset/raw/color"
 IMG_SIZE = 224
-EPOCHS = 50
+EPOCHS = 30            # Pretrained backbone converges faster than from scratch; raise if needed.
 LEARNING_RATE = 3e-4
 BATCH_SIZE = 64
 NUM_WORKERS = os.cpu_count()
@@ -73,65 +72,12 @@ PROB_CUTMIX = 0.4
 # Label smoothing for generalization
 LABEL_SMOOTHING = 0.1
 
-TRAIN_SIZE = 0.95 # Use 80% of the images for training.
+TRAIN_SIZE = 0.95 # Use 95% of the images for training.
 
-def make_subset():
-    """Separates out Corn images from the rest of the images.
-Corn images will be moved to their own directory and used for training.
-    """
-    classes = "Healthy Northern_Leaf_Blight Common_Rust Gray_Leaf_Spot".split(" ")
-    for dir_ in classes:
-        os.makedirs(f"Maize/{dir_}", exist_ok=True)
-
-    count = 0
-    for img_path in tqdm(CORN_IMAGES, desc="Separating Corn images"):
-        for class_ in classes:
-            if class_.lower() in img_path.lower():
-                shutil.copy2(img_path, f"Maize/{class_}/{count}.jpg")
-                count += 1
-
-    print(f"Successfully moved {count} images from Corn* to Maize directories.")
-
-def get_dataset_stats(data_dir):
-    """
-    Calculates the global mean and standard deviation statistics of the training images (Corn), used for normalization.
-    """
-
-    dataset = datasets.ImageFolder(root=data_dir,
-                                   transform=transforms.Compose([
-                                       transforms.Resize((IMG_SIZE, IMG_SIZE)),
-                                       transforms.ToImage(),
-                                       transforms.ToDtype(torch.float32, scale=True)
-                                       ]))
-
-    loader = DataLoader(dataset=dataset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
-
-    count = 0
-    first_moment = torch.empty(3)
-    second_moment = torch.empty(3)
-
-    print("[INFO] Calculating Mean and Std...")
-    for images, _ in tqdm(loader):
-        b, c, h, w = images.shape
-        nb_pixels = b * h * w # Number of Pixels per channel
-        sum_ = torch.sum(images, dim=[0, 2, 3]) # Sum per chanel
-        sum_of_square = torch.sum(images ** 2, dim=[0, 2, 3])
-        first_moment = (count * first_moment + sum_) / (count + nb_pixels)
-        second_moment = (count * first_moment + sum_of_square) / (count + nb_pixels)
-        count += nb_pixels
-
-    return first_moment.tolist(), torch.sqrt(second_moment.square()).tolist()
-
-#MEAN, STD = get_dataset_stats(MAIZE_DIR)
-MEAN = [0.43762004375457764,
-        0.4983558654785156,
-        0.787480592727661
-        ]
-STD  = [0.43693873286247253,
-        0.49755582213401794,
-        0.37814345955848694
-        ]
-#print(f"Mean: {MEAN} | STD: {STD}")
+# ImageNet normalization stats. These match the ImageNet-pretrained MobileNetV2
+# backbone we load below, so they are the correct choice here.
+MEAN = [0.485, 0.456, 0.406]
+STD  = [0.229, 0.224, 0.225]
 
 train_transform = transforms.Compose([
     transforms.ToImage(),
@@ -173,7 +119,7 @@ def rand_bbox(size, lam):
 
 def mixup_cutmix_data(x, y, alpha_mix=0.4, alpha_cut=1.0):
     """
-    TPU-optimized MixUp/CutMix with explicit int32 casting to fix X64 RNG errors.
+    MixUp/CutMix with explicit int32 casting on the permutation index.
     """
     p = np.random.rand()
     batch_size, _, h, w = x.shape
@@ -250,22 +196,25 @@ def trainer():
         print(f"[INFO] Using {NUM_WORKERS} CPU cores!")
         print(f"[INFO] Using device: {device} Is DDP run: {ddp} World Size: {ddp_world_size}")
 
-    full_dataset = datasets.ImageFolder(root=MAIZE_DIR)
+    full_dataset = datasets.ImageFolder(root=DATA_DIR)
     train_size = int(TRAIN_SIZE * len(full_dataset))
     val_size = len(full_dataset) - train_size
 
-    # Calculate class weights
-    # Get the count of each class directly from the ImageFolder targets
+    # Number of classes is read directly from the folder structure (38 for full PlantVillage).
+    num_classes = len(full_dataset.classes)
+
+    # Calculate class weights to counter PlantVillage's heavy class imbalance.
+    # Counts come straight from the ImageFolder targets.
     class_counts = np.bincount(full_dataset.targets)
     total_samples = len(full_dataset.targets)
-    num_classes = len(full_dataset.classes) # 4
 
-    # Calculate the inverse frequence weights
+    # Inverse-frequency weights
     weights = total_samples / (num_classes * class_counts)
     class_weights = torch.tensor(weights, dtype=torch.float32).to(device)
 
     if master_process:
-        print(f"[INFO] Cass counts: {class_counts}")
+        print(f"[INFO] Detected {num_classes} classes: {full_dataset.classes}")
+        print(f"[INFO] Class counts: {class_counts}")
         print(f"[INFO] Applied Class Weights: {class_weights.cpu().numpy()}")
 
     train_split, val_split = random_split(full_dataset, [train_size, val_size])
@@ -279,10 +228,11 @@ def trainer():
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, sampler=train_sampler, num_workers=NUM_WORKERS, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, sampler=val_sampler, num_workers=NUM_WORKERS, drop_last=True)
 
-    model = torchvision.models.mobilenet_v2()
+    # Load the ImageNet-pretrained backbone and swap in a fresh head for our classes.
+    model = torchvision.models.mobilenet_v2(weights=MobileNet_V2_Weights.IMAGENET1K_V1)
 
-    fc = nn.Linear(in_features=1280, out_features=4)
-    
+    fc = nn.Linear(in_features=1280, out_features=num_classes)
+
     # Drop the head and replace it with ours
     model.classifier[1] = fc
 
@@ -413,7 +363,9 @@ def trainer():
                 torch.save({
                     "model": model_cpu_state,
                     "epoch": epoch,
-                    "best_acc": best_acc
+                    "best_acc": best_acc,
+                    "classes": full_dataset.classes,   # label order for inference / confusion matrix
+                    "num_classes": num_classes
                     }, save_path)
                 print(f"Saved to: {save_path}")
 
@@ -422,4 +374,3 @@ if __name__ == "__main__":
 
     if ddp:
         destroy_process_group()
-

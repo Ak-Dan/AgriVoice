@@ -3,12 +3,11 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchvision import datasets
 import torchvision
-from torchvision.datasets.sbd import shutil
+from torchvision.models import MobileNet_V2_Weights
 from torchvision.transforms import v2 as transforms
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
-from glob import glob
 import os, csv
 import numpy as np
 
@@ -22,13 +21,13 @@ import torch_xla.distributed.parallel_loader as pl
 import torch_xla.runtime as xr
 
 
-DATA_DIR = "/kaggle/input/datasets/abdallahalidev/plantvillage-dataset/color"
-IMAGE_SUBSET = "Corn*/*"
-MAIZE_DIR = "Maize"
-CORN_IMAGES = glob(os.path.sep.join([DATA_DIR, IMAGE_SUBSET]))
+# Point straight at the full PlantVillage "color" directory.
+# It already contains one subfolder per class (38 classes), so no subsetting is needed.
+# Adjust this path to match where the dataset is mounted in your environment.
+DATA_DIR = "/kaggle/input/plantvillage-dataset/color"
 IMG_SIZE = 224
-EPOCHS = 50
-LEARNING_RATE = 3e-4 * 8
+EPOCHS = 30                  # Pretrained backbone converges faster than from scratch; raise if needed.
+LEARNING_RATE = 3e-4 * 8     # Scaled for 8 TPU cores.
 BATCH_SIZE = 64
 NUM_WORKERS = os.cpu_count()
 
@@ -43,54 +42,10 @@ LABEL_SMOOTHING = 0.1
 
 TRAIN_SIZE = 0.8 # Use 80% of the images for training.
 
-def make_subset():
-    """Separates out Corn images from the rest of the images.
-Corn images will be moved to their own directory and used for training.
-    """
-    classes = "Healthy Nothern_Leaf_Blight Common_Rust Gray_Leaf_Spot".split(" ")
-    for dir_ in classes:
-        os.makedirs(f"Maize/{dir_}", exist_ok=True)
-
-    count = 0
-    for img_path in tqdm(CORN_IMAGES, desc="Separating Corn images"):
-        for class_ in classes:
-            if class_.lower() in img_path.lower():
-                shutil.copy2(img_path, f"Maize/{class_}/{img_path}")
-                count += 1
-
-    print(f"Successfully moved {count} images from Corn* to Maize directories.")
-
-def get_dataset_stats(data_dir):
-    """
-    Calculates the global mean and standard deviation statistics of the training images (Corn), used for normalization.
-    """
-
-    dataset = datasets.ImageFolder(root=data_dir,
-                                   transform=transforms.Compose([
-                                       transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
-                                       transforms.ToDtype(torch.float32, scale=True)
-                                       ]))
-
-    loader = DataLoader(dataset=dataset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
-
-    count = 0
-    first_moment = torch.empty(3)
-    second_moment = torch.empty(3)
-
-    print("[INFO] Calculating Mean and Std...")
-    for images, _ in tqdm(loader):
-        b, c, h, w = images.shape
-        nb_pixels = b * h * w # Number of Pixels per channel
-        sum_ = torch.sum(images, dim=[0, 2, 3]) # Sum per chanel
-        sum_of_square = torch.sum(images ** 2, dim=[0, 2, 3])
-        first_moment = (count * first_moment + sum_) / (count + nb_pixels)
-        second_moment = (count * first_moment + sum_of_square) / (count + nb_pixels)
-        count += nb_pixels
-
-    return first_moment.tolist(), torch.sqrt(second_moment.square()).tolist()
-
-MEAN, STD = get_dataset_stats(MAIZE_DIR)
-print(f"Mean: {MEAN} | STD: {STD}")
+# ImageNet normalization stats. These match the ImageNet-pretrained MobileNetV2
+# backbone we load below, so they are the correct choice here.
+MEAN = [0.485, 0.456, 0.406]
+STD  = [0.229, 0.224, 0.225]
 
 train_transform = transforms.Compose([
     transforms.ToImage(),
@@ -208,9 +163,22 @@ def _mp_fn(rank, flags):
     if xr.global_ordinal() == 0:
         print("[INFO] Loading datasets...")
 
-    full_dataset = datasets.ImageFolder(root=MAIZE_DIR)
+    full_dataset = datasets.ImageFolder(root=DATA_DIR)
     train_size = int(TRAIN_SIZE * len(full_dataset))
     val_size = len(full_dataset) - train_size
+
+    # Number of classes is read directly from the folder structure (38 for full PlantVillage).
+    num_classes = len(full_dataset.classes)
+
+    # Class weights to counter PlantVillage's heavy class imbalance.
+    class_counts = np.bincount(full_dataset.targets)
+    total_samples = len(full_dataset.targets)
+    weights = total_samples / (num_classes * class_counts)
+    class_weights = torch.tensor(weights, dtype=torch.float32).to(device)
+
+    if xr.global_ordinal() == 0:
+        print(f"[INFO] Detected {num_classes} classes: {full_dataset.classes}")
+        print(f"[INFO] Class counts: {class_counts}")
 
     train_split, val_split = random_split(full_dataset, [train_size, val_size])
 
@@ -223,17 +191,19 @@ def _mp_fn(rank, flags):
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, sampler=train_sampler, num_workers=NUM_WORKERS, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, sampler=val_sampler, num_workers=NUM_WORKERS, drop_last=True)
 
-    model = torchvision.models.mobilenet_v2()
+    # Load the ImageNet-pretrained backbone and swap in a fresh head for our classes.
+    model = torchvision.models.mobilenet_v2(weights=MobileNet_V2_Weights.IMAGENET1K_V1)
 
-    fc = nn.Linear(in_features=1280, out_features=4)
-    
+    fc = nn.Linear(in_features=1280, out_features=num_classes)
+
     # Drop the head and replace it with ours
     model.classifier[1] = fc
+    model.to(device)
 
     lr_scaled = LEARNING_RATE
     optimizer = AdamW(model.parameters(), lr=lr_scaled, weight_decay=0.05)
 
-    criterion = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING)
+    criterion = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING, weight=class_weights)
 
     scheduler = CosineAnnealingLR(optimizer=optimizer, T_max=EPOCHS)
     log_file = "training_log.csv"
@@ -336,7 +306,9 @@ def _mp_fn(rank, flags):
                     "model": model_cpu_state,
                     "epoch": epoch,
                     "optimizer": optimizer_cpu_state,
-                    "best_acc": best_acc
+                    "best_acc": best_acc,
+                    "classes": full_dataset.classes,   # label order for inference / confusion matrix
+                    "num_classes": num_classes
                     }, save_path)
                 print(f"Saved to: {save_path}")
 
@@ -344,7 +316,6 @@ if __name__ == "__main__":
     if 'TPU_PROCESS_ADDRESSES' in os.environ:
         os.environ.pop('TPU_PROCESS_ADDRESSES')
 
-    print(f"Starting TPY Training with Mixup/CutMix/Smoothing...")
+    print(f"Starting TPU Training with Mixup/CutMix/Smoothing...")
     flags = []
     xmp.spawn(_mp_fn, args=(flags,), n_procs=None, start_method='fork')
-
