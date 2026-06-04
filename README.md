@@ -164,6 +164,20 @@ TWILIO_ACCOUNT_SID=...
 TWILIO_AUTH_TOKEN=...
 ```
 
+## Africa-Relevant Model Track
+
+The deployed model remains a PlantVillage proof-of-concept. The next model iteration should narrow the label set toward crops that better match AgriVoice's smallholder context and then add real African field-photo data.
+
+The repo includes a starter track for that work:
+
+```text
+model/AFRICA_RELEVANT_MODEL.md
+model/africa_relevant_classes.json
+model/train_africa_relevant.py
+```
+
+This first pass filters PlantVillage to maize, tomato, potato, and bell pepper classes, then adds phone-photo-style augmentation such as blur, perspective distortion, and random grayscale. It does not yet solve missing priority crops such as cassava, rice, cowpea, groundnut, banana, sorghum, or millet.
+
 ---
 
 *Built to ensure no farmer loses a harvest to a preventable disease.*
