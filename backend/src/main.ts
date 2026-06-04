@@ -11,6 +11,13 @@ import {
   decodePrediction,
   loadClassLabels,
 } from "./inference.ts";
+import {
+  buildTwilioAuthHeader,
+  formatWhatsAppDiagnosis,
+  getIncomingImageUrl,
+  twimlMessage,
+  type TwilioWebhookBody,
+} from "./whatsapp.ts";
 
 const app = express();
 const upload = multer();
@@ -29,6 +36,8 @@ const LABELS_PATH = resolve(__dirname, "../../model/labels.json");
 const CLASS_DISEASES = loadClassLabels(LABELS_PATH);
 
 let session: InferenceSession | null = null;
+
+app.use(express.urlencoded({ extended: false }));
 
 async function loadModel() {
   const model = await InferenceSession.create(MODEL_PATH);
@@ -76,6 +85,32 @@ app.options("/infer", (_, res) => {
   res.sendStatus(204);
 });
 
+async function classifyImageBuffer(buffer: Buffer): Promise<Inference> {
+  if (!session) {
+    throw new Error("Model is still loading");
+  }
+
+  const inputTensor = await preprocessImage(buffer);
+
+  const feeds: Record<string, Tensor> = {};
+  feeds[session.inputNames[0]] = inputTensor;
+
+  const results = await session.run(feeds);
+  const outputName = session.outputNames[0];
+  const output = results[outputName]?.data;
+
+  if (!output) {
+    throw new Error(`Missing output tensor: ${outputName}`);
+  }
+
+  const prediction = decodePrediction(output as ArrayLike<number>, CLASS_DISEASES);
+  return {
+    output: prediction.disease,
+    confidence: Number(prediction.confidence.toFixed(4)),
+    severity: prediction.severity,
+  };
+}
+
 async function handleInference(req: express.Request, res: express.Response) {
   try {
     if (!session) {
@@ -86,26 +121,7 @@ async function handleInference(req: express.Request, res: express.Response) {
       return res.status(400).json({ error: "No image uploaded" });
     }
 
-    const inputTensor = await preprocessImage(req.file.buffer);
-
-    const feeds: Record<string, Tensor> = {};
-    feeds[session.inputNames[0]] = inputTensor;
-
-    const results = await session.run(feeds);
-    const outputName = session.outputNames[0];
-    const output = results[outputName]?.data;
-
-    if (!output) {
-      throw new Error(`Missing output tensor: ${outputName}`);
-    }
-
-    const prediction = decodePrediction(output as ArrayLike<number>, CLASS_DISEASES);
-    const response: Inference = {
-      output: prediction.disease,
-      confidence: Number(prediction.confidence.toFixed(4)),
-      severity: prediction.severity,
-    };
-
+    const response = await classifyImageBuffer(req.file.buffer);
     res.json(response);
   } catch (err) {
     console.error(err);
@@ -114,6 +130,51 @@ async function handleInference(req: express.Request, res: express.Response) {
 }
 
 app.post("/infer", upload.single("image"), handleInference);
+
+app.post("/webhooks/twilio/whatsapp", async (req, res) => {
+  try {
+    const payload = req.body as TwilioWebhookBody;
+    const mediaUrl = getIncomingImageUrl(payload);
+
+    if (!mediaUrl) {
+      res.type("text/xml").send(
+        twimlMessage(
+          "Send a clear crop leaf photo to AgriVoice and I will return a model-backed diagnosis.",
+        ),
+      );
+      return;
+    }
+
+    if (!session) {
+      res
+        .type("text/xml")
+        .send(twimlMessage("AgriVoice is still waking up. Please resend the photo in a minute."));
+      return;
+    }
+
+    const headers: Record<string, string> = {};
+    const authHeader = buildTwilioAuthHeader();
+    if (authHeader) {
+      headers.Authorization = authHeader;
+    }
+
+    const mediaResponse = await fetch(mediaUrl, { headers });
+    if (!mediaResponse.ok) {
+      throw new Error(`Twilio media download failed: ${mediaResponse.status}`);
+    }
+
+    const imageBuffer = Buffer.from(await mediaResponse.arrayBuffer());
+    const inference = await classifyImageBuffer(imageBuffer);
+    res.type("text/xml").send(twimlMessage(formatWhatsAppDiagnosis(inference)));
+  } catch (err) {
+    console.error(err);
+    res.type("text/xml").send(
+      twimlMessage(
+        "Sorry, AgriVoice could not process that image. Please send a clear leaf photo and try again.",
+      ),
+    );
+  }
+});
 
 const PORT = Number(process.env.PORT ?? 3000);
 

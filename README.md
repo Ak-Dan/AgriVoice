@@ -141,6 +141,29 @@ Set this Vercel environment variable to the Render backend URL:
 VITE_API_URL=https://your-render-service.onrender.com
 ```
 
+## WhatsApp Webhook
+
+The backend includes a Twilio WhatsApp webhook:
+
+```text
+POST /webhooks/twilio/whatsapp
+```
+
+In the Twilio WhatsApp sandbox or Messaging Service settings, set the incoming message webhook to:
+
+```text
+https://your-render-service.onrender.com/webhooks/twilio/whatsapp
+```
+
+Twilio sends incoming WhatsApp messages as form-encoded webhook requests. If the message includes an image, AgriVoice downloads the first image, runs the same ONNX inference path used by `/infer`, and replies with TwiML.
+
+For private Twilio media downloads, set these Render environment variables:
+
+```text
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+```
+
 ---
 
 *Built to ensure no farmer loses a harvest to a preventable disease.*
