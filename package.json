@@ -11,6 +11,7 @@
     "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
     "start:backend": "npm run start -w backend",
     "start:frontend": "npm run start -w frontend",
+    "rag:ingest": "npm run rag:ingest -w backend",
     "setup:model": "node scripts/download-model.mjs"
   },
   "repository": {

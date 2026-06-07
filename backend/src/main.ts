@@ -19,6 +19,12 @@ import {
   type TwilioWebhookBody,
 } from "./whatsapp.ts";
 import { loadKnowledgeBase, retrieveAgronomyGuidance } from "./retrieval.ts";
+import {
+  createLangChainRagRetriever,
+  getRagConfig,
+  shouldUseChroma,
+  type LangChainRagRetriever,
+} from "./langchainRag.ts";
 
 const app = express();
 const upload = multer();
@@ -39,6 +45,7 @@ const CLASS_DISEASES = loadClassLabels(LABELS_PATH);
 const KNOWLEDGE_BASE = loadKnowledgeBase(KNOWLEDGE_PATH);
 
 let session: InferenceSession | null = null;
+let ragRetriever: LangChainRagRetriever | null = null;
 
 app.use(express.urlencoded({ extended: false }));
 
@@ -50,6 +57,26 @@ async function loadModel() {
   console.log("Loaded", KNOWLEDGE_BASE.length, "RAG disease guides");
   console.log("Inputs:", model.inputNames);
   console.log("Outputs:", model.outputNames);
+
+  if (shouldUseChroma()) {
+    const ragConfig = {
+      ...getRagConfig(),
+      knowledgePath: KNOWLEDGE_PATH,
+    };
+    try {
+      ragRetriever = await createLangChainRagRetriever(ragConfig);
+      console.log(
+        `LangChain/Chroma RAG enabled: ${ragConfig.collectionName} at ${ragConfig.chromaUrl}`,
+      );
+    } catch (error) {
+      ragRetriever = null;
+      console.warn("LangChain/Chroma RAG unavailable; using local markdown fallback.");
+      console.warn(error);
+    }
+  } else {
+    console.log("LangChain/Chroma RAG not configured; using local markdown fallback.");
+  }
+
   return model;
 }
 
@@ -108,12 +135,29 @@ async function classifyImageBuffer(buffer: Buffer): Promise<Inference> {
   }
 
   const prediction = decodePrediction(output as ArrayLike<number>, CLASS_DISEASES);
+  const agronomy = await retrieveDiagnosisGuidance(prediction.disease);
   return {
     output: prediction.disease,
     confidence: Number(prediction.confidence.toFixed(4)),
     severity: prediction.severity,
-    agronomy: retrieveAgronomyGuidance(prediction.disease, KNOWLEDGE_BASE),
+    agronomy,
   };
+}
+
+async function retrieveDiagnosisGuidance(label: string) {
+  if (ragRetriever) {
+    try {
+      const guidance = await ragRetriever.retrieve(label);
+      if (guidance) {
+        return guidance;
+      }
+    } catch (error) {
+      console.warn("LangChain/Chroma retrieval failed; using local markdown fallback.");
+      console.warn(error);
+    }
+  }
+
+  return retrieveAgronomyGuidance(label, KNOWLEDGE_BASE);
 }
 
 async function handleInference(req: express.Request, res: express.Response) {
