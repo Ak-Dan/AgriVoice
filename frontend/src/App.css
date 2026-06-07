@@ -613,6 +613,27 @@ body, .app-container {
   margin: 0;
 }
 
+.rag-guidance-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding-left: 20px;
+  color: #1a3a1a;
+  line-height: 1.6;
+  font-size: clamp(0.88rem, 2.2vw, 0.97rem);
+}
+
+.rag-source {
+  margin: 12px 0 0;
+  color: #166534;
+  font-size: 0.86rem;
+}
+
+.rag-source a {
+  color: #047857;
+  font-weight: 700;
+}
+
 .retry-wrap {
   display: flex;
   justify-content: center;

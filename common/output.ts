@@ -3,8 +3,20 @@
 
 export type Severity = "low" | "medium" | "high";
 
+export type AgronomyGuidance = {
+  title: string;
+  crop: string;
+  disease: string;
+  sourceName: string;
+  sourceUrl: string;
+  guidance: string[];
+  prevention?: string;
+  escalation?: string;
+};
+
 export type Inference = {
   output: string;
   confidence: number;
   severity: Severity;
+  agronomy?: AgronomyGuidance | null;
 };

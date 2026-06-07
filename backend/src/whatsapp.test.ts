@@ -46,10 +46,23 @@ describe("WhatsApp webhook helpers", () => {
       output: "Corn_(maize)___Common_rust_",
       confidence: 0.82,
       severity: "medium",
+      agronomy: {
+        title: "Maize Common Rust",
+        crop: "maize",
+        disease: "common rust",
+        sourceName: "KALRO repository",
+        sourceUrl: "https://example.com/maize-rust",
+        guidance: [
+          "Plant resistant varieties where available.",
+          "Scout leaves for rust pustules.",
+        ],
+      },
     });
 
     expect(reply).toContain("AgriVoice diagnosis");
     expect(reply).toContain("82%");
     expect(reply).toContain("Severity: medium");
+    expect(reply).toContain("Scout leaves for rust pustules.");
+    expect(reply).toContain("Source: KALRO repository");
   });
 });

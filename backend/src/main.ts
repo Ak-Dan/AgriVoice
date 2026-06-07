@@ -18,6 +18,7 @@ import {
   twimlMessage,
   type TwilioWebhookBody,
 } from "./whatsapp.ts";
+import { loadKnowledgeBase, retrieveAgronomyGuidance } from "./retrieval.ts";
 
 const app = express();
 const upload = multer();
@@ -29,11 +30,13 @@ const __dirname = dirname(__filename);
 // safest choice for onnxruntime-node; there is no size pressure server-side.
 const MODEL_PATH = resolve(__dirname, "../../model/model.onnx");
 const LABELS_PATH = resolve(__dirname, "../../model/labels.json");
+const KNOWLEDGE_PATH = resolve(__dirname, "../../knowledge/disease_guides");
 
 // Load the 38 class names in the EXACT order the model was trained on.
 // labels.json is written by convert_to_onnx.py from the checkpoint's class list,
 // so this stays in sync with the model automatically.
 const CLASS_DISEASES = loadClassLabels(LABELS_PATH);
+const KNOWLEDGE_BASE = loadKnowledgeBase(KNOWLEDGE_PATH);
 
 let session: InferenceSession | null = null;
 
@@ -44,6 +47,7 @@ async function loadModel() {
   session = model;
   console.log("Model loaded from", MODEL_PATH);
   console.log("Loaded", CLASS_DISEASES.length, "class labels");
+  console.log("Loaded", KNOWLEDGE_BASE.length, "RAG disease guides");
   console.log("Inputs:", model.inputNames);
   console.log("Outputs:", model.outputNames);
   return model;
@@ -108,6 +112,7 @@ async function classifyImageBuffer(buffer: Buffer): Promise<Inference> {
     output: prediction.disease,
     confidence: Number(prediction.confidence.toFixed(4)),
     severity: prediction.severity,
+    agronomy: retrieveAgronomyGuidance(prediction.disease, KNOWLEDGE_BASE),
   };
 }
 

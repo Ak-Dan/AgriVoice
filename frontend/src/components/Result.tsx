@@ -110,11 +110,39 @@ const Result: React.FC<ResultProps> = ({ result, imageUrl, onBack }) => {
       <div className="treat-card">
         <div className="treat-title">
           <span className="treat-icon">💊</span>
-          {t('treatment')}
+          {result.agronomy ? 'Source-backed agronomy guidance' : t('treatment')}
         </div>
-        <p className="treat-text">
-          {treatmentText}
-        </p>
+        {result.agronomy ? (
+          <>
+            <ul className="rag-guidance-list">
+              {result.agronomy.guidance.slice(0, 4).map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            {result.agronomy.prevention && (
+              <p className="treat-text">
+                <strong>Prevention: </strong>
+                {result.agronomy.prevention}
+              </p>
+            )}
+            {result.agronomy.escalation && (
+              <p className="treat-text">
+                <strong>Escalation: </strong>
+                {result.agronomy.escalation}
+              </p>
+            )}
+            <p className="rag-source">
+              Source:{' '}
+              <a href={result.agronomy.sourceUrl} target="_blank" rel="noreferrer">
+                {result.agronomy.sourceName}
+              </a>
+            </p>
+          </>
+        ) : (
+          <p className="treat-text">
+            {treatmentText}
+          </p>
+        )}
       </div>
 
       <div className="retry-wrap">

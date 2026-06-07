@@ -50,6 +50,7 @@ export function formatWhatsAppDiagnosis(inference: Inference): string {
   const diseaseName = getDiseaseName(inference.output);
   const confidence = Math.round(inference.confidence * 100);
   const treatment = getDiseaseTreatment(inference.output);
+  const ragGuidance = formatAgronomyGuidance(inference);
   const treatmentLine =
     treatment === PLACEHOLDER_TREATMENT
       ? "Treatment guidance for this crop is still being reviewed. Please consult a local extension worker before applying chemicals."
@@ -75,11 +76,23 @@ export function formatWhatsAppDiagnosis(inference: Inference): string {
     `AgriVoice diagnosis: ${diseaseName}`,
     `Confidence: ${confidence}%`,
     `Severity: ${inference.severity}`,
-    `Guidance: ${treatmentLine}`,
+    `Guidance: ${ragGuidance ?? treatmentLine}`,
     caution,
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function formatAgronomyGuidance(inference: Inference): string | null {
+  const agronomy = inference.agronomy;
+  if (!agronomy) {
+    return null;
+  }
+
+  const guidance = agronomy.guidance.slice(0, 3).map((item) => `- ${item}`);
+  const source = `Source: ${agronomy.sourceName}`;
+
+  return [...guidance, source].join("\n");
 }
 
 function escapeXml(value: string): string {
