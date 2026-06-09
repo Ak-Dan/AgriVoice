@@ -1,0 +1,46 @@
+{
+  "description": "PlantVillage subset for the next AgriVoice model iteration. This is more aligned with smallholder crops than the full 38-class demo model, but still needs real African field-photo datasets for production.",
+  "included_crops": [
+    "Corn (maize)",
+    "Tomato",
+    "Potato",
+    "Bell Pepper"
+  ],
+  "plantvillage_classes": [
+    "Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot",
+    "Corn_(maize)___Common_rust_",
+    "Corn_(maize)___Northern_Leaf_Blight",
+    "Corn_(maize)___healthy",
+    "Tomato___Bacterial_spot",
+    "Tomato___Early_blight",
+    "Tomato___Late_blight",
+    "Tomato___Leaf_Mold",
+    "Tomato___Septoria_leaf_spot",
+    "Tomato___Spider_mites Two-spotted_spider_mite",
+    "Tomato___Target_Spot",
+    "Tomato___Tomato_Yellow_Leaf_Curl_Virus",
+    "Tomato___Tomato_mosaic_virus",
+    "Tomato___healthy",
+    "Potato___Early_blight",
+    "Potato___Late_blight",
+    "Potato___healthy",
+    "Pepper,_bell___Bacterial_spot",
+    "Pepper,_bell___healthy"
+  ],
+  "missing_priority_african_crops": [
+    "Cassava",
+    "Rice",
+    "Cowpea / beans",
+    "Groundnut",
+    "Sorghum / millet",
+    "Banana / plantain"
+  ],
+  "missing_priority_diseases": [
+    "Cassava mosaic disease",
+    "Cassava brown streak disease",
+    "Rice blast",
+    "Bean angular leaf spot",
+    "Groundnut rosette",
+    "Banana Xanthomonas wilt"
+  ]
+}

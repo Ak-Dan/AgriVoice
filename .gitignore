@@ -212,6 +212,8 @@ node_modules
 #custom
 **/dist
 **/Maize
+chroma-data/
+.chroma/
 # Model artifacts — large binaries, kept in Drive not git
 *.pt
 *.onnx

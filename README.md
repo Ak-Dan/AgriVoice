@@ -141,6 +141,43 @@ Set this Vercel environment variable to the Render backend URL:
 VITE_API_URL=https://your-render-service.onrender.com
 ```
 
+## WhatsApp Webhook
+
+The backend includes a Twilio WhatsApp webhook:
+
+```text
+POST /webhooks/twilio/whatsapp
+```
+
+In the Twilio WhatsApp sandbox or Messaging Service settings, set the incoming message webhook to:
+
+```text
+https://your-render-service.onrender.com/webhooks/twilio/whatsapp
+```
+
+Twilio sends incoming WhatsApp messages as form-encoded webhook requests. If the message includes an image, AgriVoice downloads the first image, runs the same ONNX inference path used by `/infer`, and replies with TwiML.
+
+For private Twilio media downloads, set these Render environment variables:
+
+```text
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+```
+
+## Africa-Relevant Model Track
+
+The deployed model remains a PlantVillage proof-of-concept. The next model iteration should narrow the label set toward crops that better match AgriVoice's smallholder context and then add real African field-photo data.
+
+The repo includes a starter track for that work:
+
+```text
+model/AFRICA_RELEVANT_MODEL.md
+model/africa_relevant_classes.json
+model/train_africa_relevant.py
+```
+
+This first pass filters PlantVillage to maize, tomato, potato, and bell pepper classes, then adds phone-photo-style augmentation such as blur, perspective distortion, and random grayscale. It does not yet solve missing priority crops such as cassava, rice, cowpea, groundnut, banana, sorghum, or millet.
+
 ---
 
 *Built to ensure no farmer loses a harvest to a preventable disease.*

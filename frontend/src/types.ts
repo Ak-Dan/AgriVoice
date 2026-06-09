@@ -4,6 +4,17 @@
 
 export type SeverityKey = 'low' | 'medium' | 'high';
 
+export interface AgronomyGuidance {
+  title: string;
+  crop: string;
+  disease: string;
+  sourceName: string;
+  sourceUrl: string;
+  guidance: string[];
+  prevention?: string;
+  escalation?: string;
+}
+
 export interface DiagnosisResult {
   disease: string;       // i18n key (see labels.ts -> labelToKey)
   rawLabel: string;      // original model label, kept for history/debugging
@@ -11,6 +22,7 @@ export interface DiagnosisResult {
   recognized: boolean;   // false if label is not one of the 38 known classes
   confidence: number;
   severity: SeverityKey;
+  agronomy?: AgronomyGuidance | null;
 }
 
 export interface DiagnosisResponse {

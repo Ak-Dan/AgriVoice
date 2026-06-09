@@ -63,6 +63,7 @@ export async function diagnoseLeaf(imageFile: File): Promise<DiagnosisResponse> 
       healthy: recognized && isHealthyLabel(rawLabel),
       confidence: data.confidence,
       severity: data.severity as SeverityKey,
+      agronomy: data.agronomy ?? null,
     },
     error: null,
   };
