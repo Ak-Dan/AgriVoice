@@ -25,9 +25,23 @@ import {
   shouldUseChroma,
   type LangChainRagRetriever,
 } from "./langchainRag.ts";
+import {
+  createRateLimitMiddleware,
+  errorHandler,
+  notFoundHandler,
+  requestIdMiddleware,
+  requireAdminApiKey,
+  securityHeaders,
+} from "./backendGuards.ts";
+import { AsyncQueue } from "./queue.ts";
+import { createBackendMetrics } from "./metrics.ts";
 
 const app = express();
-const upload = multer();
+const upload = multer({
+  limits: {
+    fileSize: positiveInteger(process.env.MAX_UPLOAD_BYTES, 6 * 1024 * 1024),
+  },
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,6 +51,10 @@ const __dirname = dirname(__filename);
 const MODEL_PATH = resolve(__dirname, "../../model/model.onnx");
 const LABELS_PATH = resolve(__dirname, "../../model/labels.json");
 const KNOWLEDGE_PATH = resolve(__dirname, "../../knowledge/disease_guides");
+const INFERENCE_CONCURRENCY = positiveInteger(process.env.INFERENCE_CONCURRENCY, 1);
+const INFERENCE_MAX_QUEUE = positiveInteger(process.env.INFERENCE_MAX_QUEUE, 25);
+const INFER_RATE_LIMIT_MAX = positiveInteger(process.env.INFER_RATE_LIMIT_MAX, 30);
+const TWILIO_RATE_LIMIT_MAX = positiveInteger(process.env.TWILIO_RATE_LIMIT_MAX, 60);
 
 // Load the 38 class names in the EXACT order the model was trained on.
 // labels.json is written by convert_to_onnx.py from the checkpoint's class list,
@@ -46,7 +64,15 @@ const KNOWLEDGE_BASE = loadKnowledgeBase(KNOWLEDGE_PATH);
 
 let session: InferenceSession | null = null;
 let ragRetriever: LangChainRagRetriever | null = null;
+const inferenceQueue = new AsyncQueue<Inference>({
+  concurrency: INFERENCE_CONCURRENCY,
+  maxQueueSize: INFERENCE_MAX_QUEUE,
+});
+const metrics = createBackendMetrics();
 
+app.set("trust proxy", 1);
+app.use(requestIdMiddleware());
+app.use(securityHeaders());
 app.use(express.urlencoded({ extended: false }));
 
 async function loadModel() {
@@ -116,6 +142,18 @@ app.options("/infer", (_, res) => {
   res.sendStatus(204);
 });
 
+app.get("/health", (_, res) => {
+  res.json({
+    ok: true,
+    modelLoaded: Boolean(session),
+    ragMode: ragRetriever ? "chroma" : "markdown",
+  });
+});
+
+app.get("/admin/metrics", requireAdminApiKey(), (_, res) => {
+  res.json(metrics.snapshot(inferenceQueue.stats()));
+});
+
 async function classifyImageBuffer(buffer: Buffer): Promise<Inference> {
   if (!session) {
     throw new Error("Model is still loading");
@@ -162,6 +200,8 @@ async function retrieveDiagnosisGuidance(label: string) {
 
 async function handleInference(req: express.Request, res: express.Response) {
   try {
+    metrics.increment("inferenceRequests");
+
     if (!session) {
       return res.status(503).json({ error: "Model is still loading" });
     }
@@ -170,18 +210,37 @@ async function handleInference(req: express.Request, res: express.Response) {
       return res.status(400).json({ error: "No image uploaded" });
     }
 
-    const response = await classifyImageBuffer(req.file.buffer);
+    const response = await inferenceQueue.add(() => classifyImageBuffer(req.file!.buffer));
     res.json(response);
   } catch (err) {
+    metrics.increment("inferenceFailures");
     console.error(err);
-    res.status(500).json({ error: "Inference failed" });
+    const message = err instanceof Error ? err.message : "Inference failed";
+    const status = message.includes("queue is full") ? 503 : 500;
+    res.status(status).json({
+      error: status === 503 ? "Inference queue is full. Please try again shortly." : "Inference failed",
+      requestId: req.requestId,
+    });
   }
 }
 
-app.post("/infer", upload.single("image"), handleInference);
+const inferRateLimit = createRateLimitMiddleware({
+  maxRequests: INFER_RATE_LIMIT_MAX,
+  windowMs: 60_000,
+  onLimited: () => metrics.increment("rateLimitedRequests"),
+});
+const twilioRateLimit = createRateLimitMiddleware({
+  maxRequests: TWILIO_RATE_LIMIT_MAX,
+  windowMs: 60_000,
+  onLimited: () => metrics.increment("rateLimitedRequests"),
+});
 
-app.post("/webhooks/twilio/whatsapp", async (req, res) => {
+app.post("/infer", inferRateLimit, upload.single("image"), handleInference);
+
+app.post("/webhooks/twilio/whatsapp", twilioRateLimit, async (req, res) => {
   try {
+    metrics.increment("whatsappRequests");
+
     const payload = req.body as TwilioWebhookBody;
     const mediaUrl = getIncomingImageUrl(payload);
 
@@ -213,9 +272,10 @@ app.post("/webhooks/twilio/whatsapp", async (req, res) => {
     }
 
     const imageBuffer = Buffer.from(await mediaResponse.arrayBuffer());
-    const inference = await classifyImageBuffer(imageBuffer);
+    const inference = await inferenceQueue.add(() => classifyImageBuffer(imageBuffer));
     res.type("text/xml").send(twimlMessage(formatWhatsAppDiagnosis(inference)));
   } catch (err) {
+    metrics.increment("whatsappFailures");
     console.error(err);
     res.type("text/xml").send(
       twimlMessage(
@@ -225,6 +285,9 @@ app.post("/webhooks/twilio/whatsapp", async (req, res) => {
   }
 });
 
+app.use(notFoundHandler);
+app.use(errorHandler);
+
 const PORT = Number(process.env.PORT ?? 3000);
 
 loadModel().then(() => {
@@ -232,3 +295,12 @@ loadModel().then(() => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 });
+
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return parsed;
+}
