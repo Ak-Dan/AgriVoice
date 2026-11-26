@@ -4,6 +4,8 @@
 
 AgriVoice brings instant crop disease diagnosis and expert agricultural advice to rural farmers in Nigeria, Kenya, and Ethiopia. By operating entirely over channels farmers already use daily - WhatsApp and USSD - we eliminate the need for new app downloads, smartphone literacy, or high-speed internet.
 
+Link: https://agri-voice-frontend.vercel.app/
+
 ## The Problem It Solves
 
 Smallholder farmers (managing 0.5 to 5 hectares) are the backbone of African food production, yet they remain severely underserved.
